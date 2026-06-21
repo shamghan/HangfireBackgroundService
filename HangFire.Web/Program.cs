@@ -39,17 +39,22 @@ RecurringJob.AddOrUpdate<WebPuller>("pull-rss-feed",
 //Remove recurring job
 //RecurringJob.RemoveIfExists("pull-rss-feed");
 
+//trigger job on demand
+app.MapGet("/pull-feed", () =>
+{
+    RecurringJob.TriggerJob("pull-rss-feed");
+});
 
-//app.MapGet("/pull", (IBackgroundJobClient client) =>
-//{
-//    var url = "https://consultwithgriff.com/rss.xml";
-//    var directory = $"c:\\rss";
-//    var filename = "consultwithgriff.json";
-//    var tempPath = Path.Combine(directory, filename);
+app.MapGet("/pull", (IBackgroundJobClient client) =>
+{
+    var url = "https://consultwithgriff.com/rss.xml";
+    var directory = $"c:\\rss";
+    var filename = "consultwithgriff.json";
+    var tempPath = Path.Combine(directory, filename);
 
-//    // TODO: background work
-//    client.Enqueue<WebPuller>(p => p.GetRssItemUrlsAsync(url, tempPath));
-//});
+    // TODO: background work
+    client.Enqueue<WebPuller>(p => p.GetRssItemUrlsAsync(url, tempPath));
+});
 app.MapGet("/sync", (IBackgroundJobClient client) =>
 {
     var directory = $"c:\\rss";
