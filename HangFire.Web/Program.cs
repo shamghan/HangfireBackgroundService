@@ -26,16 +26,30 @@ RecurringJob.AddOrUpdate("sample-job", () => Console.WriteLine("Hangfire recurri
 BackgroundJob.Enqueue(() => Console.WriteLine("Hangfire background job executed!"));
 
 app.MapGet("/", () => "Hello World!");
-app.MapGet("/pull", (IBackgroundJobClient client) =>
-{
-    var url = "https://consultwithgriff.com/rss.xml";
-    var directory = $"c:\\rss";
-    var filename = "consultwithgriff.json";
-    var tempPath = Path.Combine(directory, filename);
 
-    // TODO: background work
-    client.Enqueue<WebPuller>(p => p.GetRssItemUrlsAsync(url, tempPath));
-});
+var url = "https://consultwithgriff.com/rss.xml";
+var directory = $"c:\\rss";
+var filename = "consultwithgriff.json";
+var tempPath = Path.Combine(directory, filename);
+
+RecurringJob.AddOrUpdate<WebPuller>("pull-rss-feed",
+    p => p.GetRssItemUrlsAsync(url, tempPath), "55 9 * * *");
+//https://crontab.guru/#55_9_*_*_*
+
+//Remove recurring job
+//RecurringJob.RemoveIfExists("pull-rss-feed");
+
+
+//app.MapGet("/pull", (IBackgroundJobClient client) =>
+//{
+//    var url = "https://consultwithgriff.com/rss.xml";
+//    var directory = $"c:\\rss";
+//    var filename = "consultwithgriff.json";
+//    var tempPath = Path.Combine(directory, filename);
+
+//    // TODO: background work
+//    client.Enqueue<WebPuller>(p => p.GetRssItemUrlsAsync(url, tempPath));
+//});
 app.MapGet("/sync", (IBackgroundJobClient client) =>
 {
     var directory = $"c:\\rss";
