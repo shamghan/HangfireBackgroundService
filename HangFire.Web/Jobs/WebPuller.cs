@@ -21,7 +21,7 @@ public class WebPuller
     {
         // check if filename directory exists
         var directory = Path.GetDirectoryName(filename);
-        if (!Directory.Exists(directory)) Directory.CreateDirectory(directory);
+        if (directory is not null && !Directory.Exists(directory)) Directory.CreateDirectory(directory);
 
         using var client = _httpClientFactory.CreateClient();
         var rssContent = await client.GetStringAsync(rssFeedUrl);
