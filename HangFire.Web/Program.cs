@@ -16,8 +16,8 @@ builder.Services.AddHangfireServer();
 
 var app = builder.Build();
 
-app.UseHangfireDashboard("/hangfire");
-
+//app.UseHangfireDashboard("/hangfire");
+app.MapHangfireDashboard("/hangfire");
 RecurringJob.AddOrUpdate("sample-job", () => Console.WriteLine("Hangfire recurring job executed!"), Cron.Daily);
 BackgroundJob.Enqueue(() => Console.WriteLine("Hangfire background job executed!"));
 
