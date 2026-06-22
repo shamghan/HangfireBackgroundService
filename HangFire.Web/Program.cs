@@ -1,11 +1,29 @@
 using Hangfire;
+using HangFire.Web;
 using HangFire.Web.Jobs;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
+//builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 
 var connectionString = builder.Configuration.GetConnectionString("HangfireConnection")!;
+
+builder.Services.AddDbContext<ApplicationDbContext>(options =>
+    options.UseSqlServer(connectionString));
+
+builder.Services.AddDefaultIdentity<IdentityUser>(options => options.SignIn.RequireConfirmedAccount = true)
+    .AddRoles<IdentityRole>()
+    .AddEntityFrameworkStores<ApplicationDbContext>();
+
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("AdminOnly", policy => policy.RequireRole("Admin"));
+});
+
+builder.Services.AddRazorPages();
 
 builder.Services.AddHttpClient();
 builder.Services.AddTransient<WebPuller>();
@@ -20,12 +38,51 @@ builder.Services.AddHangfireServer();
 
 var app = builder.Build();
 
-//app.UseHangfireDashboard("/hangfire");
-app.MapHangfireDashboard("/hangfire");
-RecurringJob.AddOrUpdate("sample-job", () => Console.WriteLine("Hangfire recurring job executed!"), Cron.Daily);
-BackgroundJob.Enqueue(() => Console.WriteLine("Hangfire background job executed!"));
+app.UseAuthentication();
+app.UseAuthorization();
 
-app.MapGet("/", () => "Hello World!");
+// kevin@tactics.co is a member of that role.
+using (var scope = app.Services.CreateScope())
+{
+    var services = scope.ServiceProvider;
+    var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
+    var userManager = services.GetRequiredService<UserManager<IdentityUser>>();
+    var dbContext = services.GetRequiredService<ApplicationDbContext>();
+    if (dbContext.Database.GetPendingMigrations().Any())
+    {
+        await dbContext.Database.MigrateAsync();
+    }
+
+    if (!await roleManager.RoleExistsAsync("Admin"))
+    {
+        var role = new IdentityRole("Admin");
+        await roleManager.CreateAsync(role);
+    }
+
+    var user = await userManager.FindByEmailAsync("ghansham@hangfire.com");
+    if (user == null)
+    {
+        user = new IdentityUser { UserName = "ghansham@hangfire.com", Email = "ghansham@hangfire.com", EmailConfirmed = true };
+        var createResult = await userManager.CreateAsync(user, "Admin@123");
+        if (!createResult.Succeeded)
+        {
+            throw new Exception($"Failed to create seed user: {string.Join(", ", createResult.Errors.Select(e => e.Description))}");
+        }
+    }
+
+    if (!(await userManager.IsInRoleAsync(user, "Admin")))
+    {
+        await userManager.AddToRoleAsync(user, "Admin");
+    }
+
+    var recurringJobManager = services.GetRequiredService<IRecurringJobManager>();
+    recurringJobManager.AddOrUpdate("sample-job", () => Console.WriteLine("Hangfire recurring job executed!"), Cron.Daily);
+
+    var backgroundJobClient = services.GetRequiredService<IBackgroundJobClient>();
+    backgroundJobClient.Enqueue(() => Console.WriteLine("Hangfire background job executed!"));
+}
+
+app.MapGet("/", () => Results.Redirect("/hangfire"));
 
 var url = "https://consultwithgriff.com/rss.xml";
 var directory = $"c:\\rss";
@@ -93,5 +150,11 @@ app.MapGet("/sync", (IBackgroundJobClient client) =>
         delayInSeconds += 5;
     }
 });
+
+app.MapHangfireDashboard(new DashboardOptions()
+{
+    Authorization = new[] { new HangFireAuthorizationFilter() }
+}).RequireAuthorization("AdminOnly");
+app.MapRazorPages();
 app.Run();
 
